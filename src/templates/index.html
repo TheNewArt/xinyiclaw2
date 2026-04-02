@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XinyiClaw Web - AI Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        header {
+            background: #16213e;
+            padding: 15px 20px;
+            border-bottom: 1px solid #0f3460;
+        }
+        
+        header h1 {
+            font-size: 1.2rem;
+            color: #00d9ff;
+        }
+        
+        .container {
+            flex: 1;
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            height: calc(100vh - 60px);
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: #16213e;
+            padding: 15px;
+            border-right: 1px solid #0f3460;
+            overflow-y: auto;
+        }
+        
+        .sidebar h3 {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        .workspace-info {
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+        }
+        
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.user {
+            text-align: right;
+        }
+        
+        .message-content {
+            display: inline-block;
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 15px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .message.user .message-content {
+            background: #00d9ff;
+            color: #000;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .message.assistant .message-content {
+            background: #16213e;
+            border-bottom-left-radius: 5px;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+            padding-top: 15px;
+            border-top: 1px solid #0f3460;
+        }
+        
+        #messageInput {
+            flex: 1;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 25px;
+            padding: 12px 20px;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+        
+        #messageInput:focus {
+            border-color: #00d9ff;
+        }
+        
+        #sendBtn {
+            background: #00d9ff;
+            color: #000;
+            border: none;
+            border-radius: 25px;
+            padding: 12px 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        #sendBtn:hover {
+            background: #00b8d9;
+        }
+        
+        #sendBtn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        
+        .typing {
+            color: #888;
+            font-style: italic;
+        }
+        
+        .tool-call {
+            background: #0f3460;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin: 5px 0;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #16213e;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            border: 1px solid #0f3460;
+        }
+        
+        .status.connected {
+            border-color: #00ff00;
+        }
+        
+        .status.error {
+            border-color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🤖 XinyiClaw Web - MiniMax API</h1>
+    </header>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="workspace-info">
+                <strong>Workspace:</strong><br>
+                <code id="workspacePath">Loading...</code>
+            </div>
+            
+            <h3>会话</h3>
+            <div id="sessionInfo">
+                <button onclick="clearSession()" style="width:100%; padding:8px; background:#0f3460; border:none; color:#fff; border-radius:5px; cursor:pointer;">
+                    🗑️ 清除会话
+                </button>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="messages" id="messages">
+                <div class="message assistant">
+                    <div class="message-content">
+👋 你好！我是 XinyiClaw Web，一个基于 MiniMax API 的 AI 助手。
+
+我可以帮你：
+• 回答问题
+• 读写文件
+• 执行命令
+• 搜索代码
+
+有什么我可以帮你的吗？
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="输入消息..." autocomplete="off">
+                <button id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status" id="status">准备就绪</div>
+
+    <script>
+        let sessionId = 'session_' + Date.now();
+        let isLoading = false;
+        
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusDiv = document.getElementById('status');
+        
+        // 设置 workspace 路径
+        document.getElementById('workspacePath').textContent = '/workspace';
+        
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || isLoading) return;
+            
+            // 添加用户消息
+            addMessage('user', message);
+            messageInput.value = '';
+            
+            // 显示加载状态
+            isLoading = true;
+            sendBtn.disabled = true;
+            statusDiv.textContent = 'AI 思考中...';
+            statusDiv.className = 'status';
+            
+            addMessage('assistant', '<span class="typing">思考中...</span>', true);
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // 移除加载消息
+                const typingMsg = messagesDiv.querySelector('.typing')?.closest('.message');
+                if (typingMsg) typingMsg.remove();
+                
+                if (data.error) {
+                    addMessage('assistant', '❌ 错误: ' + data.error);
+                    statusDiv.textContent = '错误';
+                    statusDiv.className = 'status error';
+                } else {
+                    addMessage('assistant', data.response);
+                    statusDiv.textContent = '✓ 已发送';
+                    statusDiv.className = 'status connected';
+                }
+            } catch (error) {
+                const typingMsg = messagesDiv.querySelector('.typing')?.closest('.message');
+                if (typingMsg) typingMsg.remove();
+                addMessage('assistant', '❌ 网络错误: ' + error.message);
+                statusDiv.textContent = '网络错误';
+                statusDiv.className = 'status error';
+            }
+            
+            isLoading = false;
+            sendBtn.disabled = false;
+            messageInput.focus();
+        }
+        
+        function addMessage(role, content, isTemp = false) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            msgDiv.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
+            
+            if (!isTemp) {
+                messagesDiv.appendChild(msgDiv);
+            } else {
+                messagesDiv.appendChild(msgDiv);
+            }
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        async function clearSession() {
+            try {
+                await fetch('/api/clear', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session_id: sessionId})
+                });
+                
+                messagesDiv.innerHTML = `
+                    <div class="message assistant">
+                        <div class="message-content">
+✓ 会话已清除，开始新的对话！
+                        </div>
+                    </div>
+                `;
+                sessionId = 'session_' + Date.now();
+                statusDiv.textContent = '会话已清除';
+            } catch (error) {
+                console.error('Clear error:', error);
+            }
+        }
+        
+        // 回车发送
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // 3秒后清除状态显示
+        setTimeout(() => {
+            if (statusDiv.className === 'status connected') {
+                statusDiv.textContent = '准备就绪';
+                statusDiv.className = 'status';
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
