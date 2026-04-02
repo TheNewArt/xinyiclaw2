@@ -141,20 +141,26 @@ def execute_tool(tool_name: str, arguments: dict) -> str:
                 filepath = WORKSPACE_DIR / filepath
             filepath.parent.mkdir(parents=True, exist_ok=True)
             content = arguments.get("content", "")
-            # 处理字面化的 \n 和 \r（LLM 输出时会把真正的换行转成 \\n）
-            content = content.replace('\\n', '\n').replace('\\r', '\r')
-            # 去除 markdown 代码块标记（如果模型把整块 markdown 当内容写进来了）
+            
+            # 1. 去掉外层 triple-quote 包裹（如果 content 是被 """ 包裹的字符串）
             content = content.strip()
-            if content.startswith('```'):
-                # 去掉开头的 ```python 或 ```
+            if content.startswith('"""') and content.endswith('"""') and len(content) > 6:
+                content = content[3:-3]
+            elif content.startswith('"""'):
+                content = content[3:]
+            
+            # 2. 处理转义字符：\" -> ", \\n -> 真正的换行, \\r -> 真正的回车
+            content = content.replace('\\"', '"').replace('\\n', '\n').replace('\\r', '\r')
+            
+            # 3. 去除 markdown 代码块标记（如果模型把整块 markdown 当内容写进来了）
+            if content.strip().startswith('```'):
                 lines = content.split('\n')
                 if len(lines) >= 2 and lines[0].strip().startswith('```'):
                     content = '\n'.join(lines[1:])
-                # 去掉结尾的 ```
-                lines = content.split('\n')
                 if lines and lines[-1].strip() == '```':
                     content = '\n'.join(lines[:-1])
                 content = content.strip()
+            
             filepath.write_text(content, encoding="utf-8")
             return f"Written to {filepath}"
         
