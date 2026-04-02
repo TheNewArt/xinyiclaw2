@@ -63,6 +63,59 @@ async def chat_minimax(messages: list[dict], system: str = "") -> str:
         return str(data)
 
 
+def parse_tool_call_args(tool_call_str: str) -> tuple[str, dict]:
+    """解析工具调用参数字符串
+    
+    处理格式: ToolName|key1=value1|key2=value2|...
+    支持 value 中包含 | 和 = 符号（如 JSON 或多行内容）
+    """
+    parts = tool_call_str.split('|')
+    if not parts:
+        return "", {}
+    
+    tool_name = parts[0].strip()
+    arguments = {}
+    
+    i = 1
+    while i < len(parts):
+        part = parts[i]
+        if '=' not in part:
+            i += 1
+            continue
+        
+        key, value = part.split('=', 1)
+        key = key.strip()
+        value = value.strip()
+        
+        # 处理多行字符串值（以 """ 开头）
+        # 如果 value 以 """ 开头但没有以 """ 结尾，继续合并后续部分
+        if value.startswith('"""'):
+            # 检查是否在同一 part 内关闭
+            if value.count('"""') >= 2:
+                # 简单情况: """..."""
+                value = value[3:-3]
+            else:
+                # 跨多个 part，继续合并
+                j = i + 1
+                while j < len(parts) and value.count('"""') < 2:
+                    value += '|' + parts[j]
+                    j += 1
+                # 去掉前后 """
+                if value.startswith('"""') and value.endswith('"""'):
+                    value = value[3:-3]
+                elif value.startswith('"""'):
+                    value = value[3:]
+                i = j - 1
+        elif value.startswith('"') and value.endswith('"') and value.count('"') == 2:
+            # 处理转义引号如 "hello\"world"
+            value = value[1:-1]
+        
+        arguments[key] = value
+        i += 1
+    
+    return tool_name, arguments
+
+
 def execute_tool(tool_name: str, arguments: dict) -> str:
     """执行工具"""
     try:
@@ -213,19 +266,9 @@ If no tools are needed, just answer the question directly.
         tool_results = []
         for match in matches:
             tool_call_str = match.group(1)
-            parts = tool_call_str.split('|')
-            if not parts:
+            tool_name, arguments = parse_tool_call_args(tool_call_str)
+            if not tool_name:
                 continue
-            
-            tool_name = parts[0].strip()
-            arguments = {}
-            
-            for part in parts[1:]:
-                if '=' in part:
-                    key, value = part.split('=', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    arguments[key] = value
             
             # 执行工具
             result = execute_tool(tool_name, arguments)
