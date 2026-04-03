@@ -282,3 +282,11 @@ http://localhost:5000
 ---
 
 *受 CPU 架构启发，为 LLM Agent 系统提供更高效、更可控的执行框架。*
+
+---
+
+## 🐛 Bug Log
+
+| 日期 | 问题 | 修复 | 状态 |
+|-----|------|------|------|
+| 2026-04-03 | `Semaphore` 对象不支持 async context manager 协议，导致 `'Semaphore' object does not support the asynchronous context manager protocol` | 直接使用 `asyncio.Semaphore` 替代自定义包装类 | ✅ 已修复 |
