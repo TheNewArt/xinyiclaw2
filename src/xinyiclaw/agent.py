@@ -71,7 +71,9 @@ async def chat_minimax(messages: list[dict], system: str = "", max_retries: int 
                 
                 # 记录异常响应格式
                 if not base_resp:
-                    logger.warning(f"Unexpected response structure: {str(data)[:200]}")
+                    logger.warning(f"Unexpected response structure (no base_resp): {str(data)[:300]}")
+                elif status_code == 0:
+                    logger.warning(f"Status code 0, full response: {str(data)[:300]}")
                 
                 # status_code 1000 是成功，但 status_msg 可能包含警告
                 if status_code == 1000:
