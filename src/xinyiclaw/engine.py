@@ -604,7 +604,10 @@ class AgentEngine:
         history.append({"role": "user", "content": prompt})
 
         # 检查缓存 (同一个 prompt 直接返回缓存结果)
-        cache_key = f"prompt:{prompt[:100]}"
+        # 使用完整 prompt 的 hash，不截断（Claude Code 策略）
+        import hashlib
+        prompt_hash = hashlib.blake2b(prompt.encode('utf-8'), digest_size=16).hexdigest()
+        cache_key = f"prompt:{prompt_hash}"
         cached_result = self.cache.get(cache_key, level=1)
         if cached_result is not None:
             await self.metrics.record_cache_hit()
