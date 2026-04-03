@@ -575,7 +575,14 @@ class AgentEngine:
         self.prefetcher = Prefetcher(self.cache, workspace)
         # 🔒 同步与竞争
         self.tool_lock = AsyncLock()
-        self.api_semaphore = asyncio.Semaphore(3)
+        self._api_semaphore = None  # 延迟创建，避免 event loop 绑定问题
+
+    @property
+    def api_semaphore(self):
+        """延迟创建 Semaphore，避免 event loop 绑定问题"""
+        if self._api_semaphore is None:
+            self._api_semaphore = asyncio.Semaphore(3)
+        return self._api_semaphore
         # 🚦 异常与中断
         self.watchdog = WatchdogTimer(timeout_seconds=60.0)
         self.interrupt_manager = InterruptManager()

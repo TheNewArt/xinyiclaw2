@@ -324,6 +324,7 @@ http://localhost:5000
 | 2026-04-03 | MiniMax API 返回 520 错误时没有重试，直接把错误 JSON 当结果返回 | 添加 520 自动重试（最多3次），检查 base_resp.status_code，错误响应不缓存 | ✅ 已修复 |
 | 2026-04-03 | "API Error 0:" — status_code=0 被当作最终错误而非可重试状态 | 将 status_code=0 加入可重试错误列表（与520同等处理） | ✅ 已修复 |
 | 2026-04-03 | 缓存 key 用 `prompt[:100]` 截断，导致"两数之和 vs 三数之和"等相似问题误命中 | 改用 `blake2b` 完整 hash（Claude Code 策略） | ✅ 已修复 |
+| 2026-04-03 | `Semaphore is bound to a different event loop` — Flask debug 模式重启导致 event loop 变化 | 改用延迟创建 `@property` 模式，首次使用时才创建 Semaphore | ✅ 已修复 |
 
 ---
 
