@@ -8,7 +8,7 @@ from xinyiclaw.conversations import ensure_conversations_dir
 # CLAUDE.md 文件模板 - AI 助手的系统提示和使用指南
 _INITIAL_CLAUDE_MD = f"""# {ASSISTANT_NAME} - Personal AI Assistant
 
-You are {ASSISTANT_NAME}, a personal AI assistant running on Telegram.
+You are {ASSISTANT_NAME}, a personal AI assistant.
 
 ## Your Capabilities
 - You can read, write, and edit files in your workspace

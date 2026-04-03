@@ -23,7 +23,7 @@ def setup_scheduler(bot, db_path: str) -> AsyncIOScheduler:
     """设置并配置任务调度器
     
     参数:
-        bot: Telegram Bot 对象，用于发送任务通知
+        bot: Bot 对象，用于发送通知
         db_path: 数据库路径
     
     返回:
@@ -51,7 +51,7 @@ async def _check_tasks(bot, db_path: str) -> None:
     """定期检查并执行到期的任务
     
     参数:
-        bot: Telegram Bot 对象
+        bot: Bot 对象
         db_path: 数据库路径
     
     执行流程:
@@ -80,7 +80,7 @@ async def _execute_task(task: dict, bot, db_path: str) -> None:
     
     参数:
         task: 任务字典（包含 id, chat_id, prompt, schedule_type 等）
-        bot: Telegram Bot 对象
+        bot: Bot 对象
         db_path: 数据库路径
     
     执行流程:
@@ -100,7 +100,7 @@ async def _execute_task(task: dict, bot, db_path: str) -> None:
     logger.info("Executing task %s for chat %s: %s", task_id, task_chat_id, prompt[:80])
 
     # 包装提示词，强制 AI 使用 send_message 工具通知用户
-    wrapped_prompt = f"You are executing a scheduled task. You MUST use the send_message tool to notify the user in Telegram. Task: {prompt}"
+    wrapped_prompt = f"You are executing a scheduled task. You MUST use the send_message tool to notify the user. Task: {prompt}"
     notify_state = {"sent": False}  # 跟踪消息是否已发送
 
     start = time.monotonic()
