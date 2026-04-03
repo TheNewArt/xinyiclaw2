@@ -26,16 +26,92 @@ XinyiClaw 2 将这些思想融入 Agent 引擎。
 
 ---
 
-## 六大模块
+## 核心架构：流水线 Agent
 
-| 模块 | CPU 概念 | 作用 |
-|------|---------|------|
-| **MemoryCache** | L1/L2/L3 缓存 + TLB | 多级记忆分层，热点数据快速访问 |
-| **BranchPredictor** | 分支预测 | 预测下一步工具，减少等待 |
-| **Prefetcher** | 预取 | 提前加载可能需要的文件 |
-| **AsyncLock/Semaphore** | Mutex/信号量 | 并发控制，防止资源竞争 |
-| **WatchdogTimer** | 看门狗 | 超时保护，防止死循环 |
-| **DualQueue** | 双发射队列 | 任务并行调度，流水线执行 |
+区别于传统 Agent 的"Prompt 进 → LLM → Response 出"，流水线 Agent 真正将 CPU 概念融入核心处理：
+
+### 流水线阶段
+
+```
+用户输入
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 1: DECODE (译码)                                   │
+│  - 解析用户意图                                            │
+│  - 存入寄存器文件 (Register File)                          │
+│  - 插入 Reorder Buffer (ROB)                              │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 2: PLAN (计划)                                      │
+│  - LLM 生成工具调用计划                                    │
+│  - 预测下一个工具 (Branch Prediction)                        │
+│  - 预取可能需要的文件 (Prefetch)                           │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: ACT (执行)  ← 真正的并行!                        │
+│  - 保留站 (Reservation Station) 等待操作数就绪              │
+│  - 乱序执行 (Out-of-Order Execution)                       │
+│  - 多个工具并行调用 (Simultaneous Multithreading)          │
+│  - Semaphore 控制并发数                                    │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 4: REFLECT (反思)                                  │
+│  - 结果写入 ROB (Reorder Buffer)                          │
+│  - 按顺序提交 (Commit)                                     │
+│  - 生成最终响应                                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### CPU 概念对照表
+
+| CPU 概念 | Agent 实现 | 作用 |
+|---------|---------|------|
+| **寄存器文件** | `RegisterFile` | 短期记忆，存储当前任务状态 |
+| **Reorder Buffer** | `ReorderBuffer` | 乱序执行结果按序提交，保证一致性 |
+| **保留站** | `ReservationStation` | 等待操作数就绪后执行工具 |
+| **流水线** | `PipelineAgent` | 指令分阶段并行处理 |
+| **分支预测** | `BranchPredictor` | 预测下一个工具，提前准备 |
+| **预取** | `Prefetcher` | 预测要读的文件，提前加载 |
+| **中断** | `WatchdogTimer` | 超时暂停，切换任务 |
+| **任务调度** | `TaskScheduler` | 多任务优先级调度 |
+
+### 乱序执行示例
+
+```python
+# 传统 Agent: 串行执行
+tool1()  # 等待
+tool2()  # 等待
+tool3()  # 等待
+
+# 流水线 Agent: 乱序并行
+task1 = execute_async(tool1)  # 立即返回 Future
+task2 = execute_async(tool2)
+task3 = execute_async(tool3)
+
+results = await gather(task1, task2, task3)  # 谁先完成谁先返回
+```
+
+### 寄存器文件示例
+
+```python
+# Agent 的寄存器存储当前任务状态
+registers.write("input_prompt", prompt)
+registers.write("intent", intent)
+registers.write("planned_tools", tools)
+registers.write("tool_results", results)
+
+# 上下文切换时保存寄存器快照
+task.register_snapshot = dict(registers.named)
+# 恢复时
+registers.named.update(task.register_snapshot)
+```
 
 ---
 
@@ -94,13 +170,14 @@ xinyiclaw2/
 ├── src/
 │   ├── assets/          # 架构图和数据流程图
 │   ├── xinyiclaw/
-│   │   ├── engine.py   # 核心引擎（CPU 架构模块）
-│   │   ├── agent.py    # Agent 实现
-│   │   └── config.py  # 配置
-│   └── web_app.py      # Web 接口
-├── benchmark.py         # 性能测试
-├── demo_realtime.py    # 实时演示
-└── test_metrics.py      # Metrics 验证
+│   │   ├── engine.py        # 输入处理引擎（缓存/预测/预取）
+│   │   ├── pipeline_agent.py # 流水线 Agent（真正的 CPU 概念融合）
+│   │   ├── agent.py        # Agent 实现
+│   │   └── config.py       # 配置
+│   └── web_app.py          # Web 接口
+├── benchmark.py            # 性能测试
+├── demo_realtime.py        # 实时演示
+└── test_metrics.py         # Metrics 验证
 ```
 
 ---
