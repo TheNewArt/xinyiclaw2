@@ -646,9 +646,10 @@ class AgentEngine:
         async with self.api_semaphore:
             result = await self.scheduler.execute_task(task, executor)
 
-        # 缓存结果 (不含工具调用的简单回答)
+        # 缓存结果 (不含工具调用的简单回答，且不是错误响应)
         tool_in_response = '[TOOL_CALL]' in result
-        if not tool_in_response:
+        is_error = result.startswith("API Error") or result.startswith("请求失败")
+        if not tool_in_response and not is_error:
             self.cache.put(cache_key, result, level=1)
 
         # 更新历史

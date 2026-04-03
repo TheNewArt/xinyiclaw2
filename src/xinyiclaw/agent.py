@@ -24,8 +24,10 @@ MINIMAX_API_URL = "https://llm.hytriu.cn/v1/chat/completions"
 MINIMAX_MODEL = "MiniMax-M2.1"
 
 
-async def chat_minimax(messages: list[dict], system: str = "") -> str:
-    """调用 MiniMax API"""
+async def chat_minimax(messages: list[dict], system: str = "", max_retries: int = 3) -> str:
+    """调用 MiniMax API（带重试机制）"""
+    import httpx
+    
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {ANTHROPIC_API_KEY}"
@@ -43,24 +45,62 @@ async def chat_minimax(messages: list[dict], system: str = "") -> str:
         "max_tokens": 4096
     }
     
-    import httpx
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    MINIMAX_API_URL,
+                    headers=headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                # 检查 MiniMax 业务错误码
+                base_resp = data.get("base_resp", {})
+                status_code = base_resp.get("status_code", 0)
+                
+                # status_code 1000 通常是成功，520/其他是服务端错误
+                if status_code != 1000:
+                    status_msg = base_resp.get("status_msg", "unknown error")
+                    logger.warning(f"MiniMax API error: {status_code} - {status_msg}")
+                    
+                    # 520 是服务端临时错误，可以重试
+                    if status_code == 520 or "520" in str(status_msg):
+                        last_error = f"API Error {status_code}: {status_msg}"
+                        await asyncio.sleep(1 * (attempt + 1))  # 递增等待
+                        continue
+                    
+                    # 其他错误不重试，直接返回错误信息
+                    return f"API Error {status_code}: {status_msg}"
+                
+                if data.get("choices") and data["choices"][0].get("message"):
+                    return data["choices"][0]["message"]["content"]
+                
+                if data.get("content"):
+                    return data["content"]
+                
+                return str(data)
+                
+        except httpx.TimeoutException:
+            last_error = f"Request timeout (attempt {attempt + 1}/{max_retries})"
+            logger.warning(last_error)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1 * (attempt + 1))
+                continue
+        except httpx.HTTPStatusError as e:
+            last_error = f"HTTP error: {e.response.status_code}"
+            logger.warning(last_error)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1 * (attempt + 1))
+                continue
+        except Exception as e:
+            last_error = f"Unexpected error: {str(e)}"
+            logger.exception(last_error)
+            break
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            MINIMAX_API_URL,
-            headers=headers,
-            json=payload
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get("choices") and data["choices"][0].get("message"):
-            return data["choices"][0]["message"]["content"]
-        
-        if data.get("content"):
-            return data["content"]
-        
-        return str(data)
+    return f"请求失败: {last_error}"
 
 
 def parse_tool_call_args(tool_call_str: str) -> tuple[str, dict]:
