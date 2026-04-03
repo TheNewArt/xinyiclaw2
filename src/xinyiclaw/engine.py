@@ -436,8 +436,14 @@ class PipelineScheduler:
     def __init__(self, max_parallel=3):
         self.dual_queue = DualQueue(max_in_flight=max_parallel)
         self.max_parallel = max_parallel
-        self.tool_semaphore = Semaphore(max_parallel)
+        self._tool_semaphore = None  # 延迟创建
         self._running_tasks = {}
+
+    @property
+    def tool_semaphore(self):
+        if self._tool_semaphore is None:
+            self._tool_semaphore = Semaphore(self.max_parallel)
+        return self._tool_semaphore
 
     async def submit_task(self, task):
         await self.dual_queue.submit(task)
