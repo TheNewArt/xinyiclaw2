@@ -220,26 +220,6 @@ class AsyncLock:
         self.release()
 
 
-class Semaphore:
-    """信号量 - 控制并发数（使用 asyncio 内置实现）"""
-
-    def __init__(self, value=1):
-        self._semaphore = asyncio.Semaphore(value)
-
-    async def acquire(self):
-        await self._semaphore.acquire()
-
-    def release(self):
-        self._semaphore.release()
-
-    async def __aenter__(self):
-        await self.acquire()
-        return self
-
-    async def __aexit__(self, *args):
-        self.release()
-
-
 # ============================================================================
 # 🚦 异常与中断 (Exception & Interrupt)
 # ============================================================================
@@ -436,12 +416,7 @@ class PipelineScheduler:
     def __init__(self, max_parallel=3):
         self.dual_queue = DualQueue(max_in_flight=max_parallel)
         self.max_parallel = max_parallel
-        self._tool_semaphore = None  # 延迟创建
         self._running_tasks = {}
-
-    def _get_semaphore(self):
-        """每次获取新的 Semaphore，确保使用当前 event loop"""
-        return Semaphore(self.max_parallel)
 
     async def submit_task(self, task):
         await self.dual_queue.submit(task)
@@ -578,11 +553,6 @@ class AgentEngine:
         self.prefetcher = Prefetcher(self.cache, workspace)
         # 🔒 同步与竞争
         self.tool_lock = AsyncLock()
-        self._api_semaphore = None  # 延迟创建，避免 event loop 绑定问题
-
-    def _get_semaphore(self):
-        """每次获取新的 Semaphore，确保使用当前 event loop"""
-        return asyncio.Semaphore(3)
         # 🚦 异常与中断
         self.watchdog = WatchdogTimer(timeout_seconds=60.0)
         self.interrupt_manager = InterruptManager()
