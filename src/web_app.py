@@ -102,4 +102,4 @@ if __name__ == '__main__':
 ║   http://localhost:5002                                 ║
 ╚════════════════════════════════════════════════════════════╝
     """)
-    app.run(host='0.0.0.0', port=5002, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5002, debug=False, use_reloader=False)

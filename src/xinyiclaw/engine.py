@@ -439,17 +439,15 @@ class PipelineScheduler:
         self._tool_semaphore = None  # 延迟创建
         self._running_tasks = {}
 
-    @property
-    def tool_semaphore(self):
-        if self._tool_semaphore is None:
-            self._tool_semaphore = Semaphore(self.max_parallel)
-        return self._tool_semaphore
+    def _get_semaphore(self):
+        """每次获取新的 Semaphore，确保使用当前 event loop"""
+        return Semaphore(self.max_parallel)
 
     async def submit_task(self, task):
         await self.dual_queue.submit(task)
 
     async def execute_task(self, task, executor):
-        async with self.tool_semaphore:
+        async with self._get_semaphore():
             try:
                 result = await executor(task)
                 return result
@@ -583,12 +581,9 @@ class AgentEngine:
         self.tool_lock = AsyncLock()
         self._api_semaphore = None  # 延迟创建，避免 event loop 绑定问题
 
-    @property
-    def api_semaphore(self):
-        """延迟创建 Semaphore，避免 event loop 绑定问题"""
-        if self._api_semaphore is None:
-            self._api_semaphore = asyncio.Semaphore(3)
-        return self._api_semaphore
+    def _get_semaphore(self):
+        """每次获取新的 Semaphore，确保使用当前 event loop"""
+        return asyncio.Semaphore(3)
         # 🚦 异常与中断
         self.watchdog = WatchdogTimer(timeout_seconds=60.0)
         self.interrupt_manager = InterruptManager()
@@ -659,7 +654,7 @@ class AgentEngine:
             return response
 
         # 使用信号量控制并发
-        async with self.api_semaphore:
+        async with self._get_semaphore():
             result = await self.scheduler.execute_task(task, executor)
 
         # 缓存结果 (不含工具调用的简单回答，且不是错误响应)
