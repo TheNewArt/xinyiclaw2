@@ -1,6 +1,6 @@
 # XinyiClaw Web
 
-基于 MiniMax API 的 AI 助手 Web 版本，移除 Telegram 依赖，使用浏览器控制。
+基于 MiniMax API 的 AI 助手 Web 版本，使用浏览器控制。
 
 ## 快速开始
 

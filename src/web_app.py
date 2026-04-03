@@ -4,10 +4,11 @@
 
 import asyncio
 import logging
+from pathlib import Path
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 
-from xinyiclaw.agent import run_agent
+from xinyiclaw.engine import AgentEngine
 from xinyiclaw.config import WORKSPACE_DIR
 
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
 
-# 简单的内存会话存储（生产环境应该用数据库）
+# 初始化 Agent Engine (CPU 架构启发的 Agent 引擎)
+agent_engine = AgentEngine(Path(WORKSPACE_DIR))
+
+# 简单的内存会话存储
 sessions = {}
 
 
@@ -28,7 +32,7 @@ def index():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """处理聊天消息"""
+    """处理聊天消息 - 使用 AgentEngine"""
     data = request.json
     session_id = data.get('session_id', 'default')
     message = data.get('message', '')
@@ -38,27 +42,15 @@ def chat():
     
     logger.info(f"Session {session_id}: {message}")
     
-    # 异步运行 agent
+    # 异步运行 agent engine
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # 这里需要传入 bot 对象，但我们没有 Telegram bot
-    # 创建一个 mock bot
-    class MockBot:
-        async def send_message(self, chat_id, text):
-            logger.info(f"Mock send to {chat_id}: {text}")
-            return True
-    
     try:
-        # 获取会话历史（没有则为空列表）
-        history = sessions.get(session_id, [])
-        
+        # 使用 AgentEngine 处理对话
         response, updated_messages = loop.run_until_complete(
-            run_agent(message, MockBot(), session_id, str(WORKSPACE_DIR), messages=history)
+            agent_engine.chat(message, session_id=session_id)
         )
-        
-        # 更新会话历史
-        sessions[session_id] = updated_messages
         
         return jsonify({
             'response': response,
@@ -84,10 +76,28 @@ def clear():
     return jsonify({'status': 'cleared'})
 
 
+@app.route('/api/status', methods=['GET'])
+def status():
+    """获取引擎状态"""
+    return jsonify({
+        'cache_size': {
+            'l1': len(agent_engine.cache.l1),
+            'l2': len(agent_engine.cache.l2),
+            'l3': len(agent_engine.cache.l3),
+            'tlb': len(agent_engine.cache.tlb),
+        },
+        'in_flight_tasks': agent_engine.scheduler.dual_queue.get_in_flight_count(),
+        'tool_patterns_count': len(agent_engine.predictor.tool_patterns),
+        'session_count': len(agent_engine._session_histories),
+    })
+
+
 if __name__ == '__main__':
     print("""
 ╔════════════════════════════════════════════════════════════╗
-║   XinyiClaw Web - AI Assistant with MiniMax API          ║
+║   XinyiClaw 2 - CPU-Inspired Agent Engine             ║
+║   调度与并行 | 预测与预取 | 存储层级                      ║
+║   同步与竞争 | 异常与中断 | 批量处理                       ║
 ║   http://localhost:5000                                 ║
 ╚════════════════════════════════════════════════════════════╝
     """)
