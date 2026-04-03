@@ -486,7 +486,7 @@ class AgentEngine:
         self.prefetcher = Prefetcher(self.cache, workspace)
         # 🔒 同步与竞争
         self.tool_lock = AsyncLock()
-        self.api_semaphore = Semaphore(3)
+        self.api_semaphore = asyncio.Semaphore(3)
         # 🚦 异常与中断
         self.watchdog = WatchdogTimer(timeout_seconds=60.0)
         self.interrupt_manager = InterruptManager()
