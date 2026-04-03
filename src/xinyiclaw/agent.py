@@ -57,31 +57,41 @@ async def chat_minimax(messages: list[dict], system: str = "", max_retries: int 
                 response.raise_for_status()
                 data = response.json()
                 
-                # 检查 MiniMax 业务错误码
-                base_resp = data.get("base_resp", {})
-                status_code = base_resp.get("status_code", 0)
-                
-                # status_code 1000 通常是成功，520/其他是服务端错误
-                if status_code != 1000:
-                    status_msg = base_resp.get("status_msg", "unknown error")
-                    logger.warning(f"MiniMax API error: {status_code} - {status_msg}")
-                    
-                    # 520 是服务端临时错误，可以重试
-                    if status_code == 520 or "520" in str(status_msg):
-                        last_error = f"API Error {status_code}: {status_msg}"
-                        await asyncio.sleep(1 * (attempt + 1))  # 递增等待
-                        continue
-                    
-                    # 其他错误不重试，直接返回错误信息
-                    return f"API Error {status_code}: {status_msg}"
-                
+                # 优先检查是否有有效内容（即使有错误码也可能有内容）
                 if data.get("choices") and data["choices"][0].get("message"):
                     return data["choices"][0]["message"]["content"]
                 
                 if data.get("content"):
                     return data["content"]
                 
-                return str(data)
+                # 没有有效内容，检查错误
+                base_resp = data.get("base_resp", {})
+                status_code = base_resp.get("status_code", 0) if base_resp else 0
+                status_msg = base_resp.get("status_msg", "") if base_resp else ""
+                
+                # 记录异常响应格式
+                if not base_resp:
+                    logger.warning(f"Unexpected response structure: {str(data)[:200]}")
+                
+                # status_code 1000 是成功，但 status_msg 可能包含警告
+                if status_code == 1000:
+                    # 成功但有警告信息，记录一下
+                    if status_msg and "error" in status_msg.lower():
+                        logger.warning(f"MiniMax API warning: {status_msg}")
+                    # 没有内容，返回警告信息
+                    return f"API Warning: {status_msg}" if status_msg else "Empty response from API"
+                
+                # 非 1000 都是错误
+                logger.warning(f"MiniMax API error: {status_code} - {status_msg}")
+                
+                # 520 是服务端临时错误，可以重试
+                if status_code == 520 or "520" in str(status_msg):
+                    last_error = f"API Error {status_code}: {status_msg}"
+                    await asyncio.sleep(1 * (attempt + 1))
+                    continue
+                
+                # 其他错误不重试
+                return f"API Error {status_code}: {status_msg}"
                 
         except httpx.TimeoutException:
             last_error = f"Request timeout (attempt {attempt + 1}/{max_retries})"
