@@ -447,7 +447,9 @@ class PipelineScheduler:
         await self.dual_queue.submit(task)
 
     async def execute_task(self, task, executor):
-        async with self._get_semaphore():
+        # 直接在 async 上下文创建 Semaphore
+        semaphore = asyncio.Semaphore(self.max_parallel)
+        async with semaphore:
             try:
                 result = await executor(task)
                 return result
@@ -653,8 +655,9 @@ class AgentEngine:
             )
             return response
 
-        # 使用信号量控制并发
-        async with self._get_semaphore():
+        # 使用信号量控制并发 - 直接在 async 上下文创建，确保使用当前 event loop
+        semaphore = asyncio.Semaphore(3)
+        async with semaphore:
             result = await self.scheduler.execute_task(task, executor)
 
         # 缓存结果 (不含工具调用的简单回答，且不是错误响应)
