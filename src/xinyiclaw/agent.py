@@ -57,6 +57,10 @@ async def chat_minimax(messages: list[dict], system: str = "", max_retries: int 
                 response.raise_for_status()
                 data = response.json()
                 
+                # 调试：记录原始响应
+                if not data.get("choices") and not data.get("content"):
+                    logger.info(f"API response without content: {str(data)[:500]}")
+                
                 # 优先检查是否有有效内容（即使有错误码也可能有内容）
                 if data.get("choices") and data["choices"][0].get("message"):
                     return data["choices"][0]["message"]["content"]
@@ -83,11 +87,11 @@ async def chat_minimax(messages: list[dict], system: str = "", max_retries: int 
                     # 没有内容，返回警告信息
                     return f"API Warning: {status_msg}" if status_msg else "Empty response from API"
                 
-                # 非 1000 都是错误
+                # 非 1000 都是错误（0 可能表示服务端还在处理，可重试）
                 logger.warning(f"MiniMax API error: {status_code} - {status_msg}")
                 
-                # 520 是服务端临时错误，可以重试
-                if status_code == 520 or "520" in str(status_msg):
+                # 0, 520 都是服务端临时错误，可以重试
+                if status_code in (0, 520) or "520" in str(status_msg):
                     last_error = f"API Error {status_code}: {status_msg}"
                     await asyncio.sleep(1 * (attempt + 1))
                     continue
