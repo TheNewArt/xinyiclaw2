@@ -216,27 +216,23 @@ class AsyncLock:
 
 
 class Semaphore:
-    """信号量 - 控制并发数"""
+    """信号量 - 控制并发数（使用 asyncio 内置实现）"""
 
     def __init__(self, value=1):
-        self._value = value
-        self._waiters = []
+        self._semaphore = asyncio.Semaphore(value)
 
     async def acquire(self):
-        if self._value > 0:
-            self._value -= 1
-            return True
-        future = asyncio.get_event_loop().create_future()
-        self._waiters.append(future)
-        await future
-        return True
+        await self._semaphore.acquire()
 
     def release(self):
-        if self._waiters:
-            future = self._waiters.pop(0)
-            future.set_result(True)
-        else:
-            self._value += 1
+        self._semaphore.release()
+
+    async def __aenter__(self):
+        await self.acquire()
+        return self
+
+    async def __aexit__(self, *args):
+        self.release()
 
 
 # ============================================================================
