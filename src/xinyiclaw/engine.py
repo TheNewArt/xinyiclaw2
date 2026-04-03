@@ -462,6 +462,90 @@ class PipelineScheduler:
 
 
 # ============================================================================
+# 📊 性能指标 (Metrics)
+# ============================================================================
+
+class MetricsCollector:
+    """性能指标收集器"""
+
+    def __init__(self):
+        self._lock = AsyncLock()
+        # 请求统计
+        self.total_requests = 0
+        self.total_latency_ms = 0
+        self.min_latency_ms = float('inf')
+        self.max_latency_ms = 0
+        # 缓存统计
+        self.cache_hits = 0
+        self.cache_misses = 0
+        # 预测统计
+        self.predictions_made = 0
+        self.predictions_correct = 0
+        # 预取统计
+        self.prefetches_made = 0
+        self.prefetches_used = 0
+        # 并发统计
+        self.peak_in_flight = 0
+        # 时序记录
+        self._request_start_times = []
+
+    async def record_request(self, latency_ms: float):
+        async with self._lock:
+            self.total_requests += 1
+            self.total_latency_ms += latency_ms
+            self.min_latency_ms = min(self.min_latency_ms, latency_ms)
+            self.max_latency_ms = max(self.max_latency_ms, latency_ms)
+
+    async def record_cache_hit(self):
+        async with self._lock:
+            self.cache_hits += 1
+
+    async def record_cache_miss(self):
+        async with self._lock:
+            self.cache_misses += 1
+
+    async def record_prediction(self, was_correct: bool):
+        async with self._lock:
+            self.predictions_made += 1
+            if was_correct:
+                self.predictions_correct += 1
+
+    async def record_prefetch(self, was_used: bool):
+        async with self._lock:
+            self.prefetches_made += 1
+            if was_used:
+                self.prefetches_used += 1
+
+    async def record_in_flight(self, count: int):
+        async with self._lock:
+            self.peak_in_flight = max(self.peak_in_flight, count)
+
+    def get_stats(self):
+        avg_latency = self.total_latency_ms / self.total_requests if self.total_requests > 0 else 0
+        cache_total = self.cache_hits + self.cache_misses
+        cache_hit_rate = (self.cache_hits / cache_total * 100) if cache_total > 0 else 0
+        prediction_rate = (self.predictions_correct / self.predictions_made * 100) if self.predictions_made > 0 else 0
+        prefetch_rate = (self.prefetches_used / self.prefetches_made * 100) if self.prefetches_made > 0 else 0
+
+        return {
+            "total_requests": self.total_requests,
+            "avg_latency_ms": round(avg_latency, 2),
+            "min_latency_ms": round(self.min_latency_ms, 2) if self.min_latency_ms != float('inf') else 0,
+            "max_latency_ms": round(self.max_latency_ms, 2),
+            "cache_hit_rate_%": round(cache_hit_rate, 1),
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "prediction_accuracy_%": round(prediction_rate, 1),
+            "correct_predictions": self.predictions_correct,
+            "total_predictions": self.predictions_made,
+            "prefetch_hit_rate_%": round(prefetch_rate, 1),
+            "prefetches_used": self.prefetches_used,
+            "total_prefetches": self.prefetches_made,
+            "peak_in_flight": self.peak_in_flight,
+        }
+
+
+# ============================================================================
 # 🤖 Agent Engine - 整合所有组件
 # ============================================================================
 
@@ -494,6 +578,8 @@ class AgentEngine:
         self.batch_processor = BatchProcessor(max_batch_size=8)
         # 🏗️ 调度与并行
         self.scheduler = PipelineScheduler(max_parallel=3)
+        # 📊 性能指标
+        self.metrics = MetricsCollector()
         # 全局状态
         self._task_counter = 0
         self._session_histories = {}
@@ -508,13 +594,17 @@ class AgentEngine:
         Returns:
             (response, messages)
         """
+        start_time = time.time()
         history = self._session_histories.get(session_id, [])
         history.append({"role": "user", "content": prompt})
 
         # ⚡ 分支预测
         predicted_tool, prefetch_keys = self.predictor.predict(history)
+        prefetch_used = False
         if prefetch_keys:
-            await self.prefetcher.prefetch_context(prefetch_keys, history)
+            prefetch_used = await self.prefetcher.prefetch_context(prefetch_keys, history)
+            if prefetch_used:
+                await self.metrics.record_prefetch(True)
 
         # 🏗️ 使用流水线调度器执行
         task = Task(id=self._generate_task_id(), prompt=prompt)
@@ -549,5 +639,10 @@ class AgentEngine:
                     tool_seq.append(parts[0].strip())
         if tool_seq:
             self.predictor.learn(tool_seq)
+
+        # 记录指标
+        latency_ms = (time.time() - start_time) * 1000
+        await self.metrics.record_request(latency_ms)
+        await self.metrics.record_in_flight(self.scheduler.dual_queue.get_in_flight_count())
 
         return result, history

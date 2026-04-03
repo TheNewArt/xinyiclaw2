@@ -78,7 +78,7 @@ def clear():
 
 @app.route('/api/status', methods=['GET'])
 def status():
-    """获取引擎状态"""
+    """获取引擎状态和性能指标"""
     return jsonify({
         'cache_size': {
             'l1': len(agent_engine.cache.l1),
@@ -89,6 +89,7 @@ def status():
         'in_flight_tasks': agent_engine.scheduler.dual_queue.get_in_flight_count(),
         'tool_patterns_count': len(agent_engine.predictor.tool_patterns),
         'session_count': len(agent_engine._session_histories),
+        'metrics': agent_engine.metrics.get_stats(),
     })
 
 
