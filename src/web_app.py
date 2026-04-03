@@ -99,7 +99,7 @@ if __name__ == '__main__':
 ║   XinyiClaw 2 - CPU-Inspired Agent Engine             ║
 ║   调度与并行 | 预测与预取 | 存储层级                      ║
 ║   同步与竞争 | 异常与中断 | 批量处理                       ║
-║   http://localhost:5000                                 ║
+║   http://localhost:5002                                 ║
 ╚════════════════════════════════════════════════════════════╝
     """)
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5002, debug=True, use_reloader=False)
