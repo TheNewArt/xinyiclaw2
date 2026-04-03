@@ -255,7 +255,36 @@ http://localhost:5000
 ```
 
 ### GET /api/status
-查看引擎实时状态（缓存命中率、预测准确率、并发数等）
+查看引擎实时状态和性能指标：
+
+```json
+{
+  "metrics": {
+    "total_requests": 42,
+    "avg_latency_ms": 1234.5,
+    "min_latency_ms": 234.1,
+    "max_latency_ms": 5678.9,
+    "cache_hit_rate_%": 35.2,
+    "cache_hits": 15,
+    "cache_misses": 27,
+    "prediction_accuracy_%": 68.5,
+    "correct_predictions": 37,
+    "total_predictions": 54,
+    "prefetch_hit_rate_%": 42.0,
+    "prefetches_used": 8,
+    "total_prefetches": 19,
+    "peak_in_flight": 3
+  }
+}
+```
+
+### 如何衡量效率提升？
+
+1. **延迟** — `avg_latency_ms` 越低越好
+2. **缓存命中率** — `cache_hit_rate_%` 越高越好（减少重复计算）
+3. **预测准确率** — `prediction_accuracy_%` 越高（减少等待）
+4. **预取命中率** — `prefetch_hit_rate_%` 越高（减少 I/O 等待）
+5. **并发峰值** — `peak_in_flight` 反映并行利用程度
 
 ### POST /api/clear
 清除会话
