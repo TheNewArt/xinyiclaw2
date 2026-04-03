@@ -447,14 +447,11 @@ class PipelineScheduler:
         await self.dual_queue.submit(task)
 
     async def execute_task(self, task, executor):
-        # 直接在 async 上下文创建 Semaphore
-        semaphore = asyncio.Semaphore(self.max_parallel)
-        async with semaphore:
-            try:
-                result = await executor(task)
-                return result
-            finally:
-                await self.dual_queue.complete(task.id, result, success=True)
+        try:
+            result = await executor(task)
+            return result
+        finally:
+            await self.dual_queue.complete(task.id, result, success=True)
 
     async def run_pipeline(self, tasks, executor):
         results = []
@@ -655,10 +652,9 @@ class AgentEngine:
             )
             return response
 
-        # 使用信号量控制并发 - 直接在 async 上下文创建，确保使用当前 event loop
-        semaphore = asyncio.Semaphore(3)
-        async with semaphore:
-            result = await self.scheduler.execute_task(task, executor)
+        # 暂时移除 Semaphore 控制，让系统先跑起来
+        # TODO: 后续需要并发控制时再添加
+        result = await self.scheduler.execute_task(task, executor)
 
         # 缓存结果 (不含工具调用的简单回答，且不是错误响应)
         tool_in_response = '[TOOL_CALL]' in result
