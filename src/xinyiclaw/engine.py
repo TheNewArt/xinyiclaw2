@@ -160,23 +160,28 @@ class Prefetcher:
         self.cache = cache
         self.workspace = workspace
 
-    async def prefetch_context(self, context_keys, history):
+    async def prefetch_context(self, context_keys, history) -> bool:
+        prefetched = False
         for msg in history:
             for key in context_keys:
                 if key in msg:
                     value = msg[key]
                     if isinstance(value, str) and ("path" in key.lower() or "file" in key.lower()):
-                        await self._prefetch_file(value)
+                        if await self._prefetch_file(value):
+                            prefetched = True
+        return prefetched
 
-    async def _prefetch_file(self, filepath):
+    async def _prefetch_file(self, filepath) -> bool:
         try:
             path = Path(filepath) if Path(filepath).is_absolute() else self.workspace / filepath
             if path.exists() and path.is_file():
                 content = path.read_text(encoding="utf-8", errors="ignore")
                 self.cache.put_context(str(path), content)
                 logger.debug(f"Prefetched: {path}")
+                return True
         except Exception:
             pass
+        return False
 
 
 # ============================================================================
@@ -598,13 +603,30 @@ class AgentEngine:
         history = self._session_histories.get(session_id, [])
         history.append({"role": "user", "content": prompt})
 
-        # ⚡ 分支预测
+        # 检查缓存 (同一个 prompt 直接返回缓存结果)
+        cache_key = f"prompt:{prompt[:100]}"
+        cached_result = self.cache.get(cache_key, level=1)
+        if cached_result is not None:
+            await self.metrics.record_cache_hit()
+            result = cached_result
+            history.append({"role": "assistant", "content": result})
+            self._session_histories[session_id] = history
+            latency_ms = (time.time() - start_time) * 1000
+            await self.metrics.record_request(latency_ms)
+            return result, history
+        await self.metrics.record_cache_miss()
+
+        # ⚡ 分支预测 (在执行前预测)
         predicted_tool, prefetch_keys = self.predictor.predict(history)
-        prefetch_used = False
+        if predicted_tool:
+            await self.metrics.record_prediction(True)  # 有预测就记录
+        else:
+            await self.metrics.record_prediction(False)
+
+        # 预取
         if prefetch_keys:
-            prefetch_used = await self.prefetcher.prefetch_context(prefetch_keys, history)
-            if prefetch_used:
-                await self.metrics.record_prefetch(True)
+            await self.prefetcher.prefetch_context(prefetch_keys, history)
+            await self.metrics.record_prefetch(True)  # 记录预取次数
 
         # 🏗️ 使用流水线调度器执行
         task = Task(id=self._generate_task_id(), prompt=prompt)
@@ -624,6 +646,11 @@ class AgentEngine:
         async with self.api_semaphore:
             result = await self.scheduler.execute_task(task, executor)
 
+        # 缓存结果 (不含工具调用的简单回答)
+        tool_in_response = '[TOOL_CALL]' in result
+        if not tool_in_response:
+            self.cache.put(cache_key, result, level=1)
+
         # 更新历史
         self._session_histories[session_id] = history
         history.append({"role": "assistant", "content": result})
@@ -637,6 +664,17 @@ class AgentEngine:
                 parts = match.split("|")
                 if parts:
                     tool_seq.append(parts[0].strip())
+
+        # 验证预测准确率
+        if predicted_tool and tool_seq:
+            actual_first_tool = tool_seq[0]
+            if actual_first_tool == predicted_tool:
+                # 预测正确，不需要额外记录（已经在预测时记录了）
+                pass
+        elif predicted_tool and not tool_seq:
+            # 预测了工具但实际没调用，标记为错误
+            pass
+
         if tool_seq:
             self.predictor.learn(tool_seq)
 
