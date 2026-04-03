@@ -319,6 +319,8 @@ http://localhost:5000
 | 日期 | 问题 | 修复 | 状态 |
 |-----|------|------|------|
 | 2026-04-03 | `Semaphore` 对象不支持 async context manager 协议，导致 `'Semaphore' object does not support the asynchronous context manager protocol` | 直接使用 `asyncio.Semaphore` 替代自定义包装类 | ✅ 已修复 |
+| 2026-04-03 | Metrics 显示全是 0%：缓存定义了但没实际使用、预测准确率和预取命中率没有记录 | 添加 `record_cache_hit/miss`，修复 Prefetcher 返回值，添加 test_metrics.py 验证 | ✅ 已修复 |
+| 2026-04-03 | demo_realtime.py 运行时报 UnicodeEncodeError (GBK 无法编码 emoji) | 移除 emoji，使用中文符号替代 | ✅ 已修复 |
 
 ---
 
